@@ -648,7 +648,7 @@ function addFlowerParticles(origin, count) {
             spin: (Math.random() - 0.5) * 0.12,
             sway: 8 + Math.random() * 18,
             fall: 90 + Math.random() * 170,
-            delay: Math.random() * 650,
+            delay: Math.random() * 180,
             burstDuration: 850 + Math.random() * 900,
             life: 3600 + Math.random() * 2200,
             age: 0,
@@ -667,7 +667,7 @@ function addPhotoParticle(thumb, origin, slot, compact, index) {
         controlY: Math.min(origin.y, slot[1] * innerHeight) - 90 - Math.random() * 130,
         width: compact ? 78 + Math.random() * 8 : 108 + Math.random() * 20,
         rotation: ((Math.random() - 0.5) * 18 * Math.PI) / 180,
-        delay: 140 + index * 65 + Math.random() * 220,
+        delay: Math.random() * 180,
         burstDuration: 1050 + Math.random() * 600,
         life: 5400,
         age: 0,
@@ -771,9 +771,11 @@ function stopLoveCelebration() {
     cx.clearRect(0, 0, innerWidth, innerHeight);
     loveMessageEl.classList.remove('show');
     loveMessageEl.setAttribute('aria-hidden', 'true');
-    document.querySelector('#love')?.classList.remove('is-celebrating');
+    const loveButton = document.querySelector('#love');
+    loveButton?.classList.remove('is-celebrating');
+    if (loveButton) loveButton.disabled = false;
 }
-function startLoveCelebration(button) {
+async function startLoveCelebration(button) {
     stopLoveCelebration();
     const run = celebrationRun;
     const rect = button.getBoundingClientRect();
@@ -783,6 +785,14 @@ function startLoveCelebration(button) {
     const photoSources = takeMemorySources(reducedMotion ? 4 : compact ? 7 : 12);
     const slots = memorySlots(compact);
     button.classList.add('is-celebrating');
+    button.disabled = true;
+
+    const loadedPhotos = (await Promise.all(photoSources.map(prepareMemoryThumb))).filter(Boolean);
+    if (run !== celebrationRun) {
+        button.disabled = false;
+        return;
+    }
+    button.disabled = false;
     loveMessageEl.setAttribute('aria-hidden', 'false');
     loveMessageEl.classList.add('show');
     loveStatusEl.textContent = '';
@@ -797,39 +807,25 @@ function startLoveCelebration(button) {
                 size: 25 + Math.random() * 28,
                 rotation: Math.random() * Math.PI * 2,
             })),
-            photos: [],
-        };
-        drawStaticLoveScene();
-        photoSources.forEach((src, index) => {
-            prepareMemoryThumb(src).then((thumb) => {
-                if (!thumb || run !== celebrationRun || !staticLoveScene) return;
+            photos: loadedPhotos.map((thumb, index) => {
                 const slot = slots[index % slots.length];
-                staticLoveScene.photos.push({
+                return {
                     thumb,
                     x: slot[0] * innerWidth,
                     y: slot[1] * innerHeight,
                     width: compact ? 78 : 112,
                     rotation: ((Math.random() - 0.5) * 15 * Math.PI) / 180,
-                });
-                drawStaticLoveScene();
-            });
-        });
+                };
+            }),
+        };
+        drawStaticLoveScene();
         celebrationMessageTimer = setTimeout(() => loveMessageEl.classList.remove('show'), 2400);
         celebrationStopTimer = setTimeout(stopLoveCelebration, 4200);
         return;
     }
 
     addFlowerParticles(origin, compact ? 78 : 150);
-    photoSources.forEach((src, index) => {
-        prepareMemoryThumb(src).then((thumb) => {
-            if (!thumb || run !== celebrationRun) return;
-            addPhotoParticle(thumb, origin, slots[index % slots.length], compact, index);
-            if (!celebrationFrame) {
-                celebrationLast = 0;
-                celebrationFrame = requestAnimationFrame(animateLoveCelebration);
-            }
-        });
-    });
+    loadedPhotos.forEach((thumb, index) => addPhotoParticle(thumb, origin, slots[index % slots.length], compact, index));
     celebrationFrame = requestAnimationFrame(animateLoveCelebration);
     celebrationMessageTimer = setTimeout(() => loveMessageEl.classList.remove('show'), 2700);
     celebrationStopTimer = setTimeout(stopLoveCelebration, 6800);
